@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Page Replacement Simulator</title>
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <link rel="stylesheet" href="Desain.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-[var(--background)] text-[var(--foreground)] antialiased">
+<div class="page-shell max-w-6xl mx-auto px-4 py-6">
+
+  <!-- ══════════════════════════════════
+       HEADER
+  ══════════════════════════════════ -->
+  <header class="app-header mb-6">
+    <div>
+      <p class="eyebrow">SISTEM OPERASI · VISUALISASI ALGORITMA</p>
+      <h1 class="text-2xl font-bold text-[var(--foreground)]">Page replacement</h1>
+      <p class="text-sm text-[var(--muted-foreground)] app-subtitle">
+        Simulasikan FIFO, LRU, dan OPT untuk memahami cara kerja penggantian halaman.
+      </p>
+    </div>
+  </header>
+
+  <!-- ══════════════════════════════════
+       TAB NAVIGATION
+  ══════════════════════════════════ -->
+  <nav class="tab-navigation flex gap-2 mb-6 bg-[var(--card)] border border-[var(--border)] rounded-xl p-2 w-fit" aria-label="Navigasi utama">
+    <button class="tab-btn active" onclick="switchTab('sim',this)">Simulator</button>
+    <button class="tab-btn"        onclick="switchTab('guide',this)">Panduan</button>
+    <button class="tab-btn"        onclick="switchTab('compare',this)">Komparasi</button>
+  </nav>
+
+  <!-- ══════════════════════════════════
+       TAB 1: SIMULATOR
+  ══════════════════════════════════ -->
+  <div id="tab-sim">
+
+    <!-- INPUT PANEL -->
+    <div class="panel bg-[var(--card)] border border-[var(--border)] rounded-2xl p-5 mb-5 shadow-sm">
+      <h2 class="section-heading font-semibold text-base mb-4 flex items-center gap-2">Parameter simulasi</h2>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+
+        <!-- Reference String -->
+        <div>
+          <label class="text-sm font-medium text-[var(--muted-foreground)] mb-1 block">
+            Reference String
+          </label>
+          <input type="text" id="refString"
+                 value="7 0 1 2 0 3 0 4 2 3 0 3 2"
+                 placeholder="e.g. 7 0 1 2 0 3 ..."
+                 class="w-full"
+                 oninput="validateInput()" />
+          <p class="text-xs text-[var(--muted-foreground)] mt-1">
+            Pisahkan angka dengan spasi (maks 20 referensi)
+          </p>
+        </div>
+
+        <!-- Jumlah Frame -->
+        <div>
+          <label class="text-sm font-medium text-[var(--muted-foreground)] mb-1 block">
+            Jumlah Frame
+          </label>
+          <input type="number" id="numFrames" value="3" min="1" max="6" class="w-full" />
+        </div>
+
+        <!-- Pilihan Algoritma -->
+        <div>
+          <label class="text-sm font-medium text-[var(--muted-foreground)] mb-1 block">
+            Algoritma
+          </label>
+          <select id="algorithm" class="w-full">
+            <option value="fifo">FIFO — First In First Out</option>
+            <option value="lru">LRU — Least Recently Used</option>
+            <option value="opt">OPT — Optimal (Belady)</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- SCENARIO BUTTONS -->
+      <div class="border-t border-[var(--border)] pt-4">
+        <p class="text-xs font-semibold text-[var(--muted-foreground)] mb-2">
+          Contoh input
+        </p>
+        <div class="flex flex-wrap gap-2">
+          <button class="secondary text-sm" onclick="loadScenario(1)">FIFO klasik</button>
+          <button class="secondary text-sm" onclick="loadScenario(2)">Belady's anomaly</button>
+          <button class="secondary text-sm" onclick="loadScenario(3)">Lokalitas temporal</button>
+          <button class="secondary text-sm" onclick="randomize()">Acak</button>
+        </div>
+      </div>
+
+      <!-- ACTION BUTTONS -->
+      <div class="flex gap-3 mt-4">
+        <button class="primary"    onclick="runSimulation()">Jalankan simulasi</button>
+        <button class="secondary"  onclick="stepMode()"  id="stepBtn"  style="display:none">Langkah berikutnya</button>
+        <button class="secondary"  onclick="autoPlay()"  id="autoBtn"  style="display:none">Putar otomatis</button>
+        <button class="secondary"  onclick="resetSim()"  id="resetBtn" style="display:none">Atur ulang</button>
+        <span id="errMsg" class="text-sm text-red-400 self-center"></span>
+      </div>
+    </div>
+
+    <!-- RESULT AREA (hidden by default) -->
+    <div id="resultArea" class="hidden">
+
+      <!-- STATISTICS BAR -->
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5" id="statsBar">
+        <div class="stat-box">
+          <div class="text-xs text-[var(--muted-foreground)]">Algoritma</div>
+          <div class="text-lg font-bold" id="statAlgo">—</div>
+        </div>
+        <div class="stat-box">
+          <div class="text-xs text-[var(--muted-foreground)]">Page Fault</div>
+          <div class="text-2xl font-bold text-red-400" id="statFault">—</div>
+        </div>
+        <div class="stat-box">
+          <div class="text-xs text-[var(--muted-foreground)]">Page Hit</div>
+          <div class="text-2xl font-bold text-green-400" id="statHit">—</div>
+        </div>
+        <div class="stat-box">
+          <div class="text-xs text-[var(--muted-foreground)]">Hit Ratio</div>
+          <div class="text-2xl font-bold text-blue-400" id="statRatio">—</div>
+        </div>
+      </div>
+
+      <!-- FRAME VISUALIZATION -->
+      <div class="panel bg-[var(--card)] border border-[var(--border)] rounded-2xl p-5 mb-5 shadow-sm">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="section-heading font-semibold text-base">Visualisasi langkah</h2>
+          <span class="text-sm text-[var(--muted-foreground)]" id="stepLabel">Langkah 0 / 0</span>
+        </div>
+
+        <!-- Reference string badges -->
+        <div class="mb-3">
+          <p class="text-xs text-[var(--muted-foreground)] mb-2 font-medium">Reference String:</p>
+          <div class="flex gap-1 flex-wrap" id="refRow"></div>
+        </div>
+
+        <!-- Frame grid (built dynamically by JS) -->
+        <div class="overflow-x-auto">
+          <div id="frameGrid" class="flex gap-1 min-w-max pb-2"></div>
+        </div>
+
+        <!-- Progress bar -->
+        <div class="mt-4">
+          <div class="progress-bar">
+            <div class="progress-fill" id="progressFill" style="width:0%"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- STEP LOG TABLE -->
+      <div class="panel bg-[var(--card)] border border-[var(--border)] rounded-2xl p-5 mb-5 shadow-sm">
+        <h2 class="section-heading font-semibold text-base mb-3">Rincian langkah</h2>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm min-w-[600px]">
+            <thead>
+              <tr class="border-b border-[var(--border)] text-[var(--muted-foreground)] text-xs">
+                <th class="pb-2 text-left w-10">#</th>
+                <th class="pb-2 text-center">Page</th>
+                <th class="pb-2 text-center">Status</th>
+                <th class="pb-2 text-left">Frame Setelah</th>
+                <th class="pb-2 text-left">Keterangan</th>
+              </tr>
+            </thead>
+            <tbody id="stepTable"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- FAULT CHART -->
+      <div class="panel bg-[var(--card)] border border-[var(--border)] rounded-2xl p-5 shadow-sm">
+        <h2 class="section-heading font-semibold text-base mb-3">Akumulasi page fault</h2>
+        <div class="chart-container chart-container-small">
+          <canvas id="faultChart"></canvas>
+        </div>
+      </div>
+
+    </div><!-- end #resultArea -->
+  </div><!-- end #tab-sim -->
+
+  <!-- ══════════════════════════════════
+       TAB 2: PANDUAN
+  ══════════════════════════════════ -->
+  <div id="tab-guide" class="hidden">
+    <div class="panel bg-[var(--card)] border border-[var(--border)] rounded-2xl p-6 shadow-sm space-y-5">
+      <h2 class="section-heading text-lg font-bold">Panduan algoritma</h2>
+
+      <div class="space-y-4">
+
+        <!-- FIFO -->
+        <div class="border border-[var(--border)] rounded-xl p-4">
+          <h3 class="font-bold text-base mb-2">FIFO <span class="algorithm-name">First In, First Out</span></h3>
+          <p class="text-sm text-[var(--muted-foreground)] leading-relaxed">
+            Page yang paling lama berada di memori akan digantikan terlebih dahulu.
+            Implementasi menggunakan antrian (queue).
+            <strong class="text-[var(--foreground)]">Masalah:</strong>
+            dapat mengalami <em>Belady's Anomaly</em> — menambah frame justru meningkatkan page fault.
+          </p>
+          <div class="mt-2 p-3 rounded-lg text-xs font-mono" style="background:rgba(148,163,184,0.1)">
+            Frame [1,2,3] → halaman baru masuk → ganti <strong>1</strong> (paling lama) → Frame [4,2,3]
+          </div>
+        </div>
+
+        <!-- LRU -->
+        <div class="border border-[var(--border)] rounded-xl p-4">
+          <h3 class="font-bold text-base mb-2">LRU <span class="algorithm-name">Least Recently Used</span></h3>
+          <p class="text-sm text-[var(--muted-foreground)] leading-relaxed">
+            Page yang paling lama tidak digunakan akan digantikan.
+            Berdasarkan prinsip lokalitas waktu. Lebih optimal dari FIFO
+            namun membutuhkan tracking waktu akses setiap halaman.
+          </p>
+          <div class="mt-2 p-3 rounded-lg text-xs font-mono" style="background:rgba(148,163,184,0.1)">
+            Riwayat akses: ...2,1,3 → halaman baru masuk → ganti <strong>2</strong> (paling lama tidak dipakai)
+          </div>
+        </div>
+
+        <!-- OPT -->
+        <div class="border border-[var(--border)] rounded-xl p-4">
+          <h3 class="font-bold text-base mb-2">OPT <span class="algorithm-name">Optimal (Belady)</span></h3>
+          <p class="text-sm text-[var(--muted-foreground)] leading-relaxed">
+            Gantikan halaman yang
+            <strong class="text-[var(--foreground)]">paling lama tidak akan digunakan di masa depan</strong>.
+            Hanya bisa diimplementasikan secara teoritis (offline).
+            Digunakan sebagai benchmark perbandingan.
+          </p>
+          <div class="mt-2 p-3 rounded-lg text-xs font-mono" style="background:rgba(148,163,184,0.1)">
+            Frame [A,B,C], reference mendatang: A,B,... → ganti <strong>C</strong> (tidak muncul lagi paling lama)
+          </div>
+        </div>
+
+        <!-- RUMUS -->
+        <div class="border border-[var(--border)] rounded-xl p-4 bg-[var(--background)]">
+          <h3 class="font-bold text-sm mb-2">Metrik</h3>
+          <div class="grid grid-cols-2 gap-3 text-sm">
+            <div>
+              <span class="text-[var(--muted-foreground)]">Page Fault Rate</span><br>
+              <code class="text-blue-400">= Fault / Total Referensi × 100%</code>
+            </div>
+            <div>
+              <span class="text-[var(--muted-foreground)]">Hit Ratio</span><br>
+              <code class="text-green-400">= Hit / Total Referensi × 100%</code>
+            </div>
+            <div>
+              <span class="text-[var(--muted-foreground)]">Page Fault</span><br>
+              <code class="text-red-400">terjadi saat halaman tidak ada di frame</code>
+            </div>
+            <div>
+              <span class="text-[var(--muted-foreground)]">Page Hit</span><br>
+              <code class="text-green-400">terjadi saat halaman sudah ada di frame</code>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div><!-- end #tab-guide -->
+
+  <!-- ══════════════════════════════════
+       TAB 3: KOMPARASI
+  ══════════════════════════════════ -->
+  <div id="tab-compare" class="hidden">
+    <div class="panel bg-[var(--card)] border border-[var(--border)] rounded-2xl p-5 shadow-sm">
+      <h2 class="section-heading font-semibold text-base mb-4">Perbandingan algoritma</h2>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+        <div>
+          <label class="text-sm font-medium text-[var(--muted-foreground)] mb-1 block">Reference String</label>
+          <input type="text" id="cmpRef" value="7 0 1 2 0 3 0 4 2 3 0 3 2" class="w-full" />
+        </div>
+        <div>
+          <label class="text-sm font-medium text-[var(--muted-foreground)] mb-1 block">Jumlah Frame</label>
+          <input type="number" id="cmpFrames" value="3" min="1" max="6" class="w-full" />
+        </div>
+      </div>
+
+      <div class="mb-5 flex items-center gap-3">
+        <button class="primary" onclick="runCompare()">Bandingkan algoritma</button>
+        <span id="cmpErrMsg" class="text-sm text-red-400" aria-live="polite"></span>
+      </div>
+
+      <div id="compareResult" class="hidden space-y-4">
+
+        <!-- Quick load skenario -->
+        <div class="border-t border-[var(--border)] pt-3 mb-2">
+          <p class="text-xs font-semibold text-[var(--muted-foreground)] mb-2">
+            Coba contoh input
+          </p>
+          <div class="flex flex-wrap gap-2">
+            <button class="secondary text-sm" onclick="loadCmpScenario(1)">Skenario 1</button>
+            <button class="secondary text-sm" onclick="loadCmpScenario(2)">Skenario 2</button>
+            <button class="secondary text-sm" onclick="loadCmpScenario(3)">Skenario 3</button>
+          </div>
+        </div>
+
+        <!-- Result cards (rendered by JS) -->
+        <div class="grid grid-cols-3 gap-3" id="cmpCards"></div>
+
+        <!-- Multi-line chart -->
+        <div>
+          <h3 class="font-semibold text-sm mb-2">Perbandingan Fault per Langkah</h3>
+          <div class="chart-container chart-container-large">
+            <canvas id="cmpChart"></canvas>
+          </div>
+        </div>
+
+        <!-- Scenario description box -->
+        <div id="scenarioDesc" class="border border-[var(--border)] rounded-xl p-4 mt-4 hidden">
+          <h3 class="font-semibold text-sm mb-2" id="scenarioTitle"></h3>
+          <p class="text-sm text-[var(--muted-foreground)]"  id="scenarioText"></p>
+        </div>
+
+      </div>
+    </div>
+  </div><!-- end #tab-compare -->
+
+</div><!-- end .max-w-6xl -->
+
+<script src="JavaScript.js"></script>
+</body>
+</html>
